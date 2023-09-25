@@ -1,17 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.skyfishjy.library.RippleBackground xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout  xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/content"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000"
-    app:rb_color="#fffa58"
-    app:rb_duration="3000"
-    app:rb_radius="32dp"
-    app:rb_rippleAmount="6"
-    app:rb_scale="6">
-
+    android:background="#000">
 
     <Button
         android:id="@+id/send_file_btn"
@@ -23,4 +17,5 @@
         android:textSize="35sp" />
 
 
-</com.skyfishjy.library.RippleBackground>
+
+</LinearLayout>

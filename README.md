@@ -38,7 +38,7 @@ What things you need to install the software and how to install them
 Whether partial or complete, the failure of communications infrastructure leads to preventable loss of life and damage to property,  by causing delays and errors in emergency response and disaster relief efforts. 
 One solution to this problem is to use our app for communication. As this app doesn't need any infrastructure for communication, people can use this as a means for communication.
 
-2. **Communication on Motercycle**
+2. **Communication on Motorcycle**
 Some cool ways people can use our technology to enhance riding, making it better, safer, and more fun!
 - Have live conversations with other riders in your group, so you can make route changes, signal any problems, or just make conversation while cruising
 
