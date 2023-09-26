@@ -1,7 +1,10 @@
 <resources>
-    <string name="app_name">Walkie Talkie</string>
-    <string name="gps_network_not_enabled">Kindly Enable GPS to continue</string>
-    <string name="open_location_settings">Goto Location Settings</string>
+    <string name="app_name">Android Intercom</string>
+    <string name="gps_network_not_enabled">Enable GPS to continue</string>
+    <string name="open_location_settings">Location Settings</string>
     <string name="Cancel">Cancel</string>
-    <string name="gps_network_not_enabled_title">GPS Disabled</string>
+    <string name="gps_network_not_enabled_title">Application Requires GPS To Be Enabled</string>
+    <string name="connection_status">Connection Status</string>
+    <string name="discovery_started">Discovery Started</string>
+    <string name="discovery_failed">Discovery Initialization Failed</string>
 </resources>

@@ -1,25 +1,18 @@
 package com.example.murtaza.walkietalkie;
 
 import android.Manifest;
-import android.animation.Animator;
-import android.animation.AnimatorSet;
-import android.animation.ObjectAnimator;
+import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.Point;
-import android.location.Criteria;
-import android.location.Location;
-import android.location.LocationListener;
 import android.location.LocationManager;
 import android.net.wifi.WifiManager;
 import android.net.wifi.p2p.WifiP2pConfig;
 import android.net.wifi.p2p.WifiP2pDevice;
-import android.net.wifi.p2p.WifiP2pDeviceList;
 import android.net.wifi.p2p.WifiP2pInfo;
 import android.net.wifi.p2p.WifiP2pManager;
 import android.os.Bundle;
@@ -27,20 +20,14 @@ import android.provider.Settings;
 import android.util.Log;
 import android.view.Display;
 import android.view.LayoutInflater;
-import android.view.Menu;
-import android.view.MenuInflater;
-import android.view.MenuItem;
 import android.view.View;
-import android.view.animation.AccelerateDecelerateInterpolator;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -51,10 +38,7 @@ import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
     private static final String TAG = "MainActivity";
-    private static final int MY_PERMISSIONS_REQUEST_ACCESS_COARSE_LOCATION = 1;
-    private static final int MY_PERMISSIONS_REQUEST_RECORD_AUDIO = 2;
-    private static final int MY_PERMISSIONS_REQUEST_REQUIRED_PERMISSION = 3;
-    private static final int SEPRATION_DIST_THRESHOLD = 50;
+    private static final int SEPERATION_DIST_THRESHOLD = 50;
 
     private static int device_count = 0;
     ImageView centerDeviceIcon;
@@ -62,9 +46,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     ArrayList<Point> device_points = new ArrayList<>();
 
     TextView connectionStatus;
-
-    LocationManager locationManager;
-
     WifiManager wifiManager;
     WifiP2pManager mManager;
     WifiP2pManager.Channel mChannel;
@@ -79,31 +60,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     ServerClass serverClass;
     ClientClass clientClass;
 
-    private Menu menu;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        getPermissions();
+        requestPermissionsIfRequired();
         initialSetup();
-    }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        MenuInflater menu_inflater = getMenuInflater();
-        menu_inflater.inflate(R.menu.main_menu, menu);
-        this.menu = menu;
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        int id = item.getItemId();
-        if (id == R.id.wifi_toggle) {
-            toggleWifiState();
-        }
-        return super.onOptionsItemSelected(item);
     }
 
     @Override
@@ -118,16 +80,17 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         registerReceiver(mReceiver, mIntentFilter);
     }
 
+    @SuppressLint("MissingPermission") //already asking for permission in requestPermissionsIfRequired method
     @Override
     public void onClick(View v) {
-        int view_id = v.getId();
 
-        if (getIndexFromIdPeerList(view_id) != -1) {
-            int idx = getIndexFromIdPeerList(view_id);
+        if (checkIfClickedToPair(v.getId())) {
+            int idx = getIndexFromIdPeerList(v.getId());
             final WifiP2pDevice device = custom_peers.get(idx).device;
             WifiP2pConfig config = new WifiP2pConfig();
             config.deviceAddress = device.deviceAddress;
 
+            requestPermissionsIfRequired();
             mManager.connect(mChannel, config, new WifiP2pManager.ActionListener() {
                 @Override
                 public void onSuccess() {
@@ -139,22 +102,17 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     Toast.makeText(getApplicationContext(), "Error in connecting to " + device.deviceName, Toast.LENGTH_SHORT).show();
                 }
             });
-        } else {
-            switch (v.getId()) {
-                case R.id.myImageView:
-                    checkLocationEnabled();
-                    discoverDevices();
-                    break;
-                default:
-                    break;
-            }
+        }
+        else {
+            startDiscovery(v);
         }
     }
 
     private void initialSetup() {
         // layout files
-        connectionStatus = (TextView) findViewById(R.id.connectionStatus);
-        centerDeviceIcon = (ImageView) findViewById(R.id.myImageView);
+
+        connectionStatus = findViewById(R.id.connectionStatus);
+        centerDeviceIcon = findViewById(R.id.myImageView);
         // add onClick Listeners
         centerDeviceIcon.setOnClickListener(this);
 
@@ -163,7 +121,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         Point size = new Point();
         display.getSize(size);
         device_points.add(new Point(size.x / 2, size.y / 2));
-        Log.d("MainActivity", size.x + "  " + size.y);
 
         wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
 
@@ -220,6 +177,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 
+    private void startDiscovery(View v) {
+        if (v.getId() == R.id.myImageView) {
+            checkLocationEnabled();
+            discoverDevices();
+        }
+    }
+
     private void checkLocationEnabled() {
         LocationManager lm = (LocationManager) MainActivity.this.getSystemService(Context.LOCATION_SERVICE);
         boolean gps_enabled = false;
@@ -227,28 +191,25 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         try {
             gps_enabled = lm.isProviderEnabled(LocationManager.GPS_PROVIDER);
-        } catch (Exception ex) {
+        } catch (Exception ignored) {
         }
 
         try {
             network_enabled = lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
-        } catch (Exception ex) {
+        } catch (Exception ignored) {
         }
 
         if (!gps_enabled && !network_enabled) {
-            // notify user
             new AlertDialog.Builder(MainActivity.this)
                     .setTitle(R.string.gps_network_not_enabled_title)
                     .setMessage(R.string.gps_network_not_enabled)
-                    .setPositiveButton(R.string.open_location_settings, new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface paramDialogInterface, int paramInt) {
-                            MainActivity.this.startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS));
-                        }
-                    })
-                    .setNegativeButton(R.string.Cancel, null)
+                    .setPositiveButton(R.string.open_location_settings, (paramDialogInterface, paramInt) -> MainActivity.this.startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)))
                     .show();
         }
+    }
+
+    private boolean checkIfClickedToPair(int id) {
+        return getIndexFromIdPeerList(id) != -1;
     }
 
     private int getIndexFromIdPeerList(int id) {
@@ -260,7 +221,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         return -1;
     }
 
-    private int checkPeersListByName(String deviceName) {
+    private int checkPeerListByName(String deviceName) {
         for (CustomDevice d : custom_peers) {
             if (d.deviceName.equals(deviceName)) {
                 return custom_peers.indexOf(d);
@@ -269,75 +230,66 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         return -1;
     }
 
+    @SuppressLint("MissingPermission")
     private void discoverDevices() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
-            ActivityCompat.checkSelfPermission(this, Manifest.permission.NEARBY_WIFI_DEVICES) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.NEARBY_WIFI_DEVICES, Manifest.permission.ACCESS_FINE_LOCATION}, 1);
-
-            return;
-        }
+        requestPermissionsIfRequired();
         mManager.discoverPeers(mChannel, new WifiP2pManager.ActionListener() {
             @Override
             public void onSuccess() {
-                connectionStatus.setText("Discovery Started");
+                connectionStatus.setText(getString(R.string.discovery_started));
             }
 
             @Override
             public void onFailure(int reason) {
-                connectionStatus.setText("Discovery start Failed");
+                connectionStatus.setText(getString(R.string.discovery_failed));
             }
         });
     }
 
-    WifiP2pManager.PeerListListener peerListListener = new WifiP2pManager.PeerListListener() {
-        @Override
-        public void onPeersAvailable(WifiP2pDeviceList peersList) {
-            Log.d("DEVICE_NAME", "Listener called"+peersList.getDeviceList().size());
-            if(peersList.getDeviceList().size() != 0){
+    WifiP2pManager.PeerListListener peerListListener = peersList -> {
+        Log.d("PEER_DISCOVERY", "Listener called, available device count: "+peersList.getDeviceList().size());
+        if(peersList.getDeviceList().size() != 0){
 
-                // first make a list of all devices already present
-                ArrayList<CustomDevice> device_already_present = new ArrayList<>();
+            // first make a list of all devices already present
+            ArrayList<CustomDevice> device_already_present = new ArrayList<>();
 
-                for(WifiP2pDevice device : peersList.getDeviceList()){
-                    int idx = checkPeersListByName(device.deviceName);
-                    if(idx != -1){
-                        // device already in list
-                        device_already_present.add(custom_peers.get(idx));
-                    }
-                }
-
-                if(device_already_present.size() == peersList.getDeviceList().size()){
-                    // all discovered devices already present
-                    return;
-                }
-
-                // this will remove all devices no longer in range
-                custom_peers.clear();
-                // add all devices in range
-                custom_peers.addAll(device_already_present);
-
-
-                for(WifiP2pDevice device : peersList.getDeviceList()) {
-                    if (checkPeersListByName(device.deviceName) == -1) {
-                        // device not already present
-                        View tmp_device = createNewDevice(device.deviceName);
-                        foundDevice(tmp_device);
-
-                        CustomDevice tmp_device_obj = new CustomDevice();
-                        tmp_device_obj.deviceName = device.deviceName;
-                        tmp_device_obj.id = tmp_device.getId();
-                        tmp_device_obj.device = device;
-                        tmp_device_obj.icon_view = tmp_device;
-
-                        custom_peers.add(tmp_device_obj);
-                    }
+            for(WifiP2pDevice device : peersList.getDeviceList()){
+                Log.d("PEER_DISCOVERY", "available device: "+device.deviceName);
+                int idx = checkPeerListByName(device.deviceName);
+                if(idx != -1){
+                    // device already in list
+                    device_already_present.add(custom_peers.get(idx));
                 }
             }
 
-            if(peersList.getDeviceList().size() == 0){
-                Toast.makeText(getApplicationContext(), "No Peers Found", Toast.LENGTH_SHORT).show();
+            if(device_already_present.size() == peersList.getDeviceList().size()){
+                // all discovered devices already present
+                return;
             }
+
+            // this will remove all devices no longer in range
+            custom_peers.clear();
+            // add all devices in range
+            custom_peers.addAll(device_already_present);
+
+
+            for(WifiP2pDevice device : peersList.getDeviceList()) {
+                if (checkPeerListByName(device.deviceName) == -1) {
+                    // device not already present
+                    View tmp_device = createNewDevice(device.deviceName);
+                    CustomDevice tmp_device_obj = new CustomDevice();
+                    tmp_device_obj.deviceName = device.deviceName;
+                    tmp_device_obj.id = tmp_device.getId();
+                    tmp_device_obj.device = device;
+                    tmp_device_obj.icon_view = tmp_device;
+
+                    custom_peers.add(tmp_device_obj);
+                }
+            }
+        }
+
+        if(peersList.getDeviceList().size() == 0){
+            Toast.makeText(getApplicationContext(), "No Peers Found", Toast.LENGTH_SHORT).show();
         }
     };
 
@@ -358,36 +310,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     };
 
-    Point generateRandomPosition(){
-        Display display = getWindowManager(). getDefaultDisplay();
-        Point size = new Point();
-        display.getSize(size);
-        int SCREEN_WIDTH = size.x;
-        int SCREEN_HEIGHT = size.y;
-
-        int height_start = SCREEN_HEIGHT / 2 - 300;
-        int x = 0;
-        int y = 0;
-
-        do{
-            x = (int)(Math.random() * SCREEN_WIDTH);
-            y = (int)(Math.random() * height_start);
-        }while(checkPositionOverlap(new Point(x, y)));
-
-        Point new_point = new Point(x, y);
-        device_points.add(new_point);
-
-        return new_point;
-
-    }
-
     boolean checkPositionOverlap(Point new_p){
     //  if overlap, then return true, else return false
         if(!device_points.isEmpty()){
             for(Point p:device_points){
                 int distance = (int)Math.sqrt(Math.pow(new_p.x - p.x, 2) + Math.pow(new_p.y - p.y, 2));
                 Log.d(TAG, distance+"");
-                if(distance < SEPRATION_DIST_THRESHOLD){
+                if(distance < SEPERATION_DIST_THRESHOLD){
                     return true;
                 }
             }
@@ -408,42 +337,15 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         return device1;
     }
 
-    private void foundDevice(View foundDevice){
-        AnimatorSet animatorSet = new AnimatorSet();
-        animatorSet.setDuration(400);
-        animatorSet.setInterpolator(new AccelerateDecelerateInterpolator());
-        ArrayList<Animator> animatorList=new ArrayList<Animator>();
-        ObjectAnimator scaleXAnimator = ObjectAnimator.ofFloat(foundDevice, "ScaleX", 0f, 1.2f, 1f);
-        animatorList.add(scaleXAnimator);
-        ObjectAnimator scaleYAnimator = ObjectAnimator.ofFloat(foundDevice, "ScaleY", 0f, 1.2f, 1f);
-        animatorList.add(scaleYAnimator);
-        animatorSet.playTogether(animatorList);
-        foundDevice.setVisibility(View.VISIBLE);
-        animatorSet.start();
-    }
+    private void requestPermissionsIfRequired() {
+        if ((ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
+                || (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED)
+                || (ContextCompat.checkSelfPermission(this, Manifest.permission.NEARBY_WIFI_DEVICES) != PackageManager.PERMISSION_GRANTED)) {
 
-    private void toggleWifiState() {
-        if(wifiManager.isWifiEnabled()){
-            wifiManager.setWifiEnabled(false);
-            menu.findItem(R.id.wifi_toggle).setTitle("Turn Wifi On");
-        }else{
-            wifiManager.setWifiEnabled(true);
-            menu.findItem(R.id.wifi_toggle).setTitle("Turn Wifi Off");
-        }
-    }
-
-    private void getPermissions() {
-        if ((ContextCompat.checkSelfPermission(this,
-                Manifest.permission.RECORD_AUDIO)
-                != PackageManager.PERMISSION_GRANTED)
-                || (ContextCompat.checkSelfPermission(this,
-                Manifest.permission.ACCESS_COARSE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED)) {
             ActivityCompat.requestPermissions(this,
                     new String[]{Manifest.permission.RECORD_AUDIO,
-                            Manifest.permission.ACCESS_COARSE_LOCATION
-                    },
-                    MY_PERMISSIONS_REQUEST_REQUIRED_PERMISSION);
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.NEARBY_WIFI_DEVICES}, 1);
         }
     }
 
