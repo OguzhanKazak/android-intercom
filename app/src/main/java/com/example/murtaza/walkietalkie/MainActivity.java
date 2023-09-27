@@ -21,7 +21,10 @@ import android.util.Log;
 import android.view.Display;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.ImageView;
+import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -43,6 +46,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private static int device_count = 0;
     ImageView centerDeviceIcon;
 
+    ListView peerListView;
+    ArrayAdapter<CustomDevice> peerListViewAdapter;
+
     ArrayList<Point> device_points = new ArrayList<>();
 
     TextView connectionStatus;
@@ -55,7 +61,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     BroadcastReceiver mReceiver;
     IntentFilter mIntentFilter;
 
-    ArrayList<CustomDevice> custom_peers = new ArrayList<>();
+    ArrayList<CustomDevice> customPeers = new ArrayList<>();
 
     ServerClass serverClass;
     ClientClass clientClass;
@@ -86,7 +92,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         if (checkIfClickedToPair(v.getId())) {
             int idx = getIndexFromIdPeerList(v.getId());
-            final WifiP2pDevice device = custom_peers.get(idx).device;
+            final WifiP2pDevice device = customPeers.get(idx).device;
             WifiP2pConfig config = new WifiP2pConfig();
             config.deviceAddress = device.deviceAddress;
 
@@ -108,11 +114,88 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 
+    WifiP2pManager.PeerListListener peerListListener = peersList -> {
+        Log.d("PEER_DISCOVERY", "Listener called, available device count: "+peersList.getDeviceList().size());
+        if(peersList.getDeviceList().size() != 0){
+
+            // first make a list of all devices already present
+            ArrayList<CustomDevice> deviceAlreadyPresent = new ArrayList<>();
+
+            for(WifiP2pDevice device : peersList.getDeviceList()){
+                Log.d("PEER_DISCOVERY", "available device: "+device.deviceName);
+                int idx = checkPeerListByName(device.deviceName);
+                if(idx != -1){
+                    // device already in list
+                    deviceAlreadyPresent.add(customPeers.get(idx));
+                }
+            }
+
+            if(deviceAlreadyPresent.size() == peersList.getDeviceList().size()){
+                // all discovered devices already present
+                return;
+            }
+
+            // this will remove all devices no longer in range
+            clearPeerList();
+            // add all devices in range
+            deviceAlreadyPresent.forEach(this::addToPeerList);
+
+
+            for(WifiP2pDevice device : peersList.getDeviceList()) {
+                if (checkPeerListByName(device.deviceName) == -1) {
+                    // device not already present
+                    View newDevice = createNewDevice(device.deviceName);
+                    CustomDevice customDevice = new CustomDevice();
+                    customDevice.deviceName = device.deviceName;
+                    customDevice.id = newDevice.getId();
+                    customDevice.device = device;
+                    customDevice.icon_view = newDevice;
+
+                    addToPeerList(customDevice);
+                }
+            }
+        }
+
+        if(peersList.getDeviceList().size() == 0){
+            Toast.makeText(getApplicationContext(), "No Peers Found", Toast.LENGTH_SHORT).show();
+        }
+    };
+
+    WifiP2pManager.ConnectionInfoListener connectionInfoListener = new WifiP2pManager.ConnectionInfoListener() {
+        @Override
+        public void onConnectionInfoAvailable(WifiP2pInfo info) {
+            final InetAddress groupOwnerAddress = info.groupOwnerAddress;
+
+            if(info.groupFormed && info.isGroupOwner){
+                connectionStatus.setText("HOST");
+                serverClass = new ServerClass();
+                serverClass.start();
+            }else if(info.groupFormed){
+                connectionStatus.setText("CLIENT");
+                clientClass = new ClientClass(groupOwnerAddress);
+                clientClass.start();
+            }
+        }
+    };
+
     private void initialSetup() {
         // layout files
 
         connectionStatus = findViewById(R.id.connectionStatus);
         centerDeviceIcon = findViewById(R.id.myImageView);
+        peerListView = findViewById(R.id.dynamic_peer_list_view);
+
+        peerListViewAdapter = new ArrayAdapter<>(
+                this, android.R.layout.simple_list_item_1,
+                customPeers);
+
+        peerListView.setAdapter(peerListViewAdapter);
+        peerListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                onClick(view);
+            }
+        });
         // add onClick Listeners
         centerDeviceIcon.setOnClickListener(this);
 
@@ -212,19 +295,29 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         return getIndexFromIdPeerList(id) != -1;
     }
 
+    private void addToPeerList(CustomDevice device) {
+        customPeers.add(device);
+        peerListViewAdapter.notifyDataSetChanged();
+    }
+
+    private void clearPeerList() {
+        customPeers.clear();
+        peerListViewAdapter.notifyDataSetChanged();
+    }
+
     private int getIndexFromIdPeerList(int id) {
-        for (CustomDevice d : custom_peers) {
+        for (CustomDevice d : customPeers) {
             if (d.id == id) {
-                return custom_peers.indexOf(d);
+                return customPeers.indexOf(d);
             }
         }
         return -1;
     }
 
     private int checkPeerListByName(String deviceName) {
-        for (CustomDevice d : custom_peers) {
+        for (CustomDevice d : customPeers) {
             if (d.deviceName.equals(deviceName)) {
-                return custom_peers.indexOf(d);
+                return customPeers.indexOf(d);
             }
         }
         return -1;
@@ -245,70 +338,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
         });
     }
-
-    WifiP2pManager.PeerListListener peerListListener = peersList -> {
-        Log.d("PEER_DISCOVERY", "Listener called, available device count: "+peersList.getDeviceList().size());
-        if(peersList.getDeviceList().size() != 0){
-
-            // first make a list of all devices already present
-            ArrayList<CustomDevice> device_already_present = new ArrayList<>();
-
-            for(WifiP2pDevice device : peersList.getDeviceList()){
-                Log.d("PEER_DISCOVERY", "available device: "+device.deviceName);
-                int idx = checkPeerListByName(device.deviceName);
-                if(idx != -1){
-                    // device already in list
-                    device_already_present.add(custom_peers.get(idx));
-                }
-            }
-
-            if(device_already_present.size() == peersList.getDeviceList().size()){
-                // all discovered devices already present
-                return;
-            }
-
-            // this will remove all devices no longer in range
-            custom_peers.clear();
-            // add all devices in range
-            custom_peers.addAll(device_already_present);
-
-
-            for(WifiP2pDevice device : peersList.getDeviceList()) {
-                if (checkPeerListByName(device.deviceName) == -1) {
-                    // device not already present
-                    View tmp_device = createNewDevice(device.deviceName);
-                    CustomDevice tmp_device_obj = new CustomDevice();
-                    tmp_device_obj.deviceName = device.deviceName;
-                    tmp_device_obj.id = tmp_device.getId();
-                    tmp_device_obj.device = device;
-                    tmp_device_obj.icon_view = tmp_device;
-
-                    custom_peers.add(tmp_device_obj);
-                }
-            }
-        }
-
-        if(peersList.getDeviceList().size() == 0){
-            Toast.makeText(getApplicationContext(), "No Peers Found", Toast.LENGTH_SHORT).show();
-        }
-    };
-
-    WifiP2pManager.ConnectionInfoListener connectionInfoListener = new WifiP2pManager.ConnectionInfoListener() {
-        @Override
-        public void onConnectionInfoAvailable(WifiP2pInfo info) {
-            final InetAddress groupOwnerAddress = info.groupOwnerAddress;
-
-            if(info.groupFormed && info.isGroupOwner){
-                connectionStatus.setText("HOST");
-                serverClass = new ServerClass();
-                serverClass.start();
-            }else if(info.groupFormed){
-                connectionStatus.setText("CLIENT");
-                clientClass = new ClientClass(groupOwnerAddress);
-                clientClass.start();
-            }
-        }
-    };
 
     boolean checkPositionOverlap(Point new_p){
     //  if overlap, then return true, else return false
@@ -358,5 +387,10 @@ class CustomDevice{
     View icon_view;
     CustomDevice(){
 
+    }
+
+    @Override
+    public String toString() {
+        return deviceName;
     }
 }
