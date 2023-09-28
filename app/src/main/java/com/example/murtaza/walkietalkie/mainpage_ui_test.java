@@ -37,7 +37,7 @@ public class mainpage_ui_test extends AppCompatActivity implements View.OnClickL
         final View[] device_array = {device1, device2};
 
 //        foundDevice=(ImageView)findViewById(R.id.foundDevice);
-        ImageView button=(ImageView)findViewById(R.id.myImageView);
+        ImageView button=(ImageView)findViewById(R.id.discoverView);
         button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {

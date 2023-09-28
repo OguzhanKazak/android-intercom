@@ -27,7 +27,7 @@
         app:layout_constraintTop_toTopOf="parent" />
 
     <ImageView
-        android:id="@+id/myImageView"
+        android:id="@+id/discoverView"
         android:layout_width="64dp"
         android:layout_height="64dp"
         android:src="@drawable/phone2"

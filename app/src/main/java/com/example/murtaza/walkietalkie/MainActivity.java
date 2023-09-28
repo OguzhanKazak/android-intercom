@@ -43,26 +43,20 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private static final String TAG = "MainActivity";
     private static final int SEPERATION_DIST_THRESHOLD = 50;
 
+    public static final int PORT_USED = 9584;
     private static int device_count = 0;
     ImageView centerDeviceIcon;
-
     ListView peerListView;
     ArrayAdapter<CustomDevice> peerListViewAdapter;
-
     ArrayList<Point> device_points = new ArrayList<>();
-
     TextView connectionStatus;
     WifiManager wifiManager;
     WifiP2pManager mManager;
     WifiP2pManager.Channel mChannel;
 
-    public static final int PORT_USED = 9584;
-
     BroadcastReceiver mReceiver;
     IntentFilter mIntentFilter;
-
     ArrayList<CustomDevice> customPeers = new ArrayList<>();
-
     ServerClass serverClass;
     ClientClass clientClass;
 
@@ -86,32 +80,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         registerReceiver(mReceiver, mIntentFilter);
     }
 
-    @SuppressLint("MissingPermission") //already asking for permission in requestPermissionsIfRequired method
     @Override
     public void onClick(View v) {
-
-        if (checkIfClickedToPair(v.getId())) {
-            int idx = getIndexFromIdPeerList(v.getId());
-            final WifiP2pDevice device = customPeers.get(idx).device;
-            WifiP2pConfig config = new WifiP2pConfig();
-            config.deviceAddress = device.deviceAddress;
-
-            requestPermissionsIfRequired();
-            mManager.connect(mChannel, config, new WifiP2pManager.ActionListener() {
-                @Override
-                public void onSuccess() {
-                    Toast.makeText(getApplicationContext(), "Connected to " + device.deviceName, Toast.LENGTH_SHORT).show();
-                }
-
-                @Override
-                public void onFailure(int reason) {
-                    Toast.makeText(getApplicationContext(), "Error in connecting to " + device.deviceName, Toast.LENGTH_SHORT).show();
-                }
-            });
-        }
-        else {
-            startDiscovery(v);
-        }
+        startDiscovery(v);
     }
 
     WifiP2pManager.PeerListListener peerListListener = peersList -> {
@@ -146,10 +117,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     // device not already present
                     View newDevice = createNewDevice(device.deviceName);
                     CustomDevice customDevice = new CustomDevice();
-                    customDevice.deviceName = device.deviceName;
-                    customDevice.id = newDevice.getId();
-                    customDevice.device = device;
-                    customDevice.icon_view = newDevice;
+                    customDevice.setDeviceName(device.deviceName);
+                    customDevice.setId(newDevice.getId());
+                    customDevice.setDevice(device);
+                    customDevice.setIconView(newDevice);
 
                     addToPeerList(customDevice);
                 }
@@ -182,7 +153,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         // layout files
 
         connectionStatus = findViewById(R.id.connectionStatus);
-        centerDeviceIcon = findViewById(R.id.myImageView);
+        centerDeviceIcon = findViewById(R.id.discoverView);
         peerListView = findViewById(R.id.dynamic_peer_list_view);
 
         peerListViewAdapter = new ArrayAdapter<>(
@@ -193,7 +164,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         peerListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                onClick(view);
+                onClickPair(position);
             }
         });
         // add onClick Listeners
@@ -261,7 +232,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     private void startDiscovery(View v) {
-        if (v.getId() == R.id.myImageView) {
+        if (v.getId() == R.id.discoverView) {
             checkLocationEnabled();
             discoverDevices();
         }
@@ -291,8 +262,27 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 
-    private boolean checkIfClickedToPair(int id) {
-        return getIndexFromIdPeerList(id) != -1;
+    @SuppressLint("MissingPermission") //already asking for permission in requestPermissionsIfRequired method
+    private void onClickPair(int position) {
+
+        CustomDevice peer = customPeers.get(position);
+
+        final WifiP2pDevice device = peer.getDevice();
+        WifiP2pConfig config = new WifiP2pConfig();
+        config.deviceAddress = device.deviceAddress;
+
+        requestPermissionsIfRequired();
+        mManager.connect(mChannel, config, new WifiP2pManager.ActionListener() {
+            @Override
+            public void onSuccess() {
+                Toast.makeText(getApplicationContext(), "Connected to " + device.deviceName, Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onFailure(int reason) {
+                Toast.makeText(getApplicationContext(), "Error in connecting to " + device.deviceName, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     private void addToPeerList(CustomDevice device) {
@@ -307,7 +297,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private int getIndexFromIdPeerList(int id) {
         for (CustomDevice d : customPeers) {
-            if (d.id == id) {
+            if (d.getId() == id) {
                 return customPeers.indexOf(d);
             }
         }
@@ -316,7 +306,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private int checkPeerListByName(String deviceName) {
         for (CustomDevice d : customPeers) {
-            if (d.deviceName.equals(deviceName)) {
+            if (d.getDeviceName().equals(deviceName)) {
                 return customPeers.indexOf(d);
             }
         }
@@ -337,20 +327,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 connectionStatus.setText(getString(R.string.discovery_failed));
             }
         });
-    }
-
-    boolean checkPositionOverlap(Point new_p){
-    //  if overlap, then return true, else return false
-        if(!device_points.isEmpty()){
-            for(Point p:device_points){
-                int distance = (int)Math.sqrt(Math.pow(new_p.x - p.x, 2) + Math.pow(new_p.y - p.y, 2));
-                Log.d(TAG, distance+"");
-                if(distance < SEPERATION_DIST_THRESHOLD){
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     public View createNewDevice(String device_name){
@@ -378,19 +354,4 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 
-}
-
-class CustomDevice{
-    int id;
-    String deviceName;
-    WifiP2pDevice device;
-    View icon_view;
-    CustomDevice(){
-
-    }
-
-    @Override
-    public String toString() {
-        return deviceName;
-    }
 }
